@@ -1,5 +1,7 @@
 const express = require("express");
+const cors = require("cors");
 const app = express();
+
 
 
 const userRoutes = require("./routes/userRoutes");
@@ -14,6 +16,10 @@ const ticketRoutes = require("./routes/ticketRoutes");
 // Middleware pour lire le JSON
 console.log("userRoutes value:", userRoutes);
 
+
+app.use(cors({
+  origin: "http://localhost:3001"
+}));
 app.use(express.json());
 
 // Routes
