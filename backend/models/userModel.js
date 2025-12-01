@@ -45,7 +45,9 @@ function updateUser(id, name, email, password, callback) {
 
 function deleteUser(id, callback) {
   const query = `DELETE FROM users WHERE id = ?`;
-  db.run(query, [id], callback);
+   db.run(query, [id], function (err) {
+    callback(err, this.changes);
+  });
 }
 // Export des fonctions
 module.exports = {

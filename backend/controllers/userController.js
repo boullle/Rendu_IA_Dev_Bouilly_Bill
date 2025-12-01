@@ -93,17 +93,43 @@ exports.updateUser = async (req, res) => {
 };
 
 // Supprimer un utilisateur
+// exports.deleteUser = async (req, res) => {
+//   try {
+//     const id = parseInt(req.params.id);
+//     if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
+
+//     // Implémentation à ajouter dans userModel : deleteUser(id, callback)
+//     userModel.deleteUser(id, (err) => {
+//       if (err) {
+//         console.error("Erreur lors de la suppression :", err);
+//         return res.status(500).json({ error: "Erreur serveur lors de la suppression." });
+//       }
+//       if (this.changes === 0) {
+//         return res.status(404).json({ error: "Utilisateur non trouvé." });
+//       }
+//       res.status(200).json({ message: "Utilisateur supprimé avec succès." });
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: "Erreur inattendue." });
+//   }
+// };
+
 exports.deleteUser = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
 
-    // Implémentation à ajouter dans userModel : deleteUser(id, callback)
-    userModel.deleteUser(id, (err) => {
+    userModel.deleteUser(id, (err, changes) => {
       if (err) {
         console.error("Erreur lors de la suppression :", err);
         return res.status(500).json({ error: "Erreur serveur lors de la suppression." });
       }
+
+      // Si aucune ligne affectée → ID inexistant
+      if (changes === 0) {
+        return res.status(404).json({ error: "Utilisateur non trouvé." });
+      }
+
       res.status(200).json({ message: "Utilisateur supprimé avec succès." });
     });
   } catch (error) {
