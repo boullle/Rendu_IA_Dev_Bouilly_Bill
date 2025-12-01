@@ -1,0 +1,74 @@
++----------------+
+|      User      |
++----------------+
+| - id: int      |
+| - name: string |
+| - email: string|
+| - password: string |
++----------------+
+| +createUser()  |
+| +getAllUsers() |
+| +getUserById() |
+| +updateUser()  |
+| +deleteUser()  |
++----------------+
+
++----------------+
+|    Product     |
++----------------+
+| - id: int      |
+| - name: string |
+| - price: float |
+| - stock: int   |
++----------------+
+| +createProduct()|
+| +getAllProducts()|
+| +getProductById()|
+| +updateProduct() |
+| +deleteProduct() |
++----------------+
+
++----------------+
+|      Task      |
++----------------+
+| - id: int      |
+| - title: string|
+| - description: string|
+| - status: string|
++----------------+
+| +createTask()  |
+| +getAllTasks() |
+| +getTaskById() |
+| +updateTask()  |
+| +deleteTask()  |
++----------------+
+
++----------------+
+|     Project    |
++----------------+
+| - id: int      |
+| - name: string |
+| - description: string |
+| - status: string|
++----------------+
+| +createProject()|
+| +getAllProjects()|
+| +getProjectById()|
+| +updateProject() |
+| +deleteProject() |
++----------------+
+
++----------------+
+|     Ticket     |
++----------------+
+| - id: int      |
+| - title: string|
+| - description: string|
+| - status: string|
++----------------+
+| +createTicket()|
+| +getAllTickets()|
+| +getTicketById()|
+| +updateTicket() |
+| +deleteTicket() |
++----------------+

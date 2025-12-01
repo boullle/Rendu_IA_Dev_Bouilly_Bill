@@ -1,0 +1,621 @@
+backend/
+	config/
+		db.js
+	controllers/
+		userController.js
+	models/userModel/
+		userModel.js
+	node_modules/
+	routes/
+		userRoutes.js
+	App.js
+	database.sqlite
+	package-lock.json
+	package.json
+
+
+
+db.js
+
+const sqlite3 = require('sqlite3').verbose() ;
+const db = new sqlite3.Database('database.db') ;
+module.exports = db ;			
+
+
+userController.js
+
+
+
+
+const userModel = require("../models/userModel");
+
+// Récupérer tous les utilisateurs
+exports.getAllUsers = async (req, res) => {
+  try {
+    userModel.getAllUsers((err, users) => {
+      if (err) {
+        console.error("Erreur lors de la récupération des utilisateurs :", err);
+        return res.status(500).json({ error: "Erreur serveur lors de la récupération des utilisateurs." });
+      }
+      res.status(200).json(users);
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur inattendue." });
+  }
+};
+
+// Récupérer un utilisateur par ID
+exports.getUserById = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
+
+    userModel.getUserById(id, (err, user) => {
+      if (err) {
+        console.error("Erreur lors de la récupération de l'utilisateur :", err);
+        return res.status(500).json({ error: "Erreur serveur." });
+      }
+      if (!user) return res.status(404).json({ error: "Utilisateur non trouvé." });
+
+      res.status(200).json(user);
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur inattendue." });
+  }
+};
+
+// Créer un nouvel utilisateur
+exports.createUser = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Tous les champs sont requis." });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères." });
+    }
+
+    userModel.createUser(name, email, password, (err, result) => {
+      if (err) {
+        if (err.message.includes("UNIQUE constraint failed")) {
+          return res.status(409).json({ error: "Email déjà utilisé." });
+        }
+        console.error("Erreur lors de la création :", err);
+        return res.status(500).json({ error: "Erreur serveur lors de la création." });
+      }
+      res.status(201).json({ message: "Utilisateur créé avec succès.", id: result.id });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur inattendue." });
+  }
+};
+
+// Mettre à jour un utilisateur
+exports.updateUser = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { name, email, password } = req.body;
+
+    if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Tous les champs sont requis." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères." });
+    }
+
+    // Implémentation à ajouter dans userModel : updateUser(id, name, email, password, callback)
+    userModel.updateUser(id, name, email, password, (err) => {
+      if (err) {
+        console.error("Erreur lors de la mise à jour :", err);
+        return res.status(500).json({ error: "Erreur serveur lors de la mise à jour." });
+      }
+      res.status(200).json({ message: "Utilisateur mis à jour avec succès." });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur inattendue." });
+  }
+};
+
+// Supprimer un utilisateur
+// exports.deleteUser = async (req, res) => {
+//   try {
+//     const id = parseInt(req.params.id);
+//     if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
+
+//     // Implémentation à ajouter dans userModel : deleteUser(id, callback)
+//     userModel.deleteUser(id, (err) => {
+//       if (err) {
+//         console.error("Erreur lors de la suppression :", err);
+//         return res.status(500).json({ error: "Erreur serveur lors de la suppression." });
+//       }
+//       if (this.changes === 0) {
+//         return res.status(404).json({ error: "Utilisateur non trouvé." });
+//       }
+//       res.status(200).json({ message: "Utilisateur supprimé avec succès." });
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: "Erreur inattendue." });
+//   }
+// };
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "ID invalide." });
+
+    userModel.deleteUser(id, (err, changes) => {
+      if (err) {
+        console.error("Erreur lors de la suppression :", err);
+        return res.status(500).json({ error: "Erreur serveur lors de la suppression." });
+      }
+
+      // Si aucune ligne affectée → ID inexistant
+      if (changes === 0) {
+        return res.status(404).json({ error: "Utilisateur non trouvé." });
+      }
+
+      res.status(200).json({ message: "Utilisateur supprimé avec succès." });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur inattendue." });
+  }
+};
+
+
+userModel.js
+
+// models/userModel.js
+
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./database.sqlite');
+
+// Création de la table User avec contraintes
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,                      -- name obligatoire
+      email TEXT UNIQUE NOT NULL,              -- email unique
+      password TEXT NOT NULL CHECK (LENGTH(password) >= 8) -- password min 8 caractères
+    )
+  `);
+});
+
+// Fonction pour insérer un nouvel utilisateur
+function createUser(name, email, password, callback) {
+  const query = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`;
+  db.run(query, [name, email, password], function (err) {
+    callback(err, { id: this.lastID });
+  });
+}
+
+// Fonction pour récupérer tous les utilisateurs
+function getAllUsers(callback) {
+  db.all(`SELECT id, name, email FROM users`, [], (err, rows) => {
+    callback(err, rows);
+  });
+}
+
+// Fonction pour récupérer un utilisateur par ID
+function getUserById(id, callback) {
+  db.get(`SELECT id, name, email FROM users WHERE id = ?`, [id], (err, row) => {
+    callback(err, row);
+  });
+}
+
+
+function updateUser(id, name, email, password, callback) {
+  const query = `UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?`;
+  db.run(query, [name, email, password, id], callback);
+}
+
+function deleteUser(id, callback) {
+  const query = `DELETE FROM users WHERE id = ?`;
+   db.run(query, [id], function (err) {
+    callback(err, this.changes);
+  });
+}
+// Export des fonctions
+module.exports = {
+  createUser,
+  getAllUsers,
+  getUserById,
+  updateUser,
+  deleteUser
+};
+
+userRoutes.js
+
+const express = require("express");
+const router = express.Router();
+const userController = require("../controllers/userController");
+
+// CRUD
+router.get("/", userController.getAllUsers);      // Read All
+router.get("/:id", userController.getUserById);   // Read One
+router.post("/", userController.createUser);      // Create
+router.put("/:id", userController.updateUser);    // Update
+router.delete("/:id", userController.deleteUser); // Delete
+
+module.exports = router;
+
+
+
+App.js
+const express = require("express");
+const app = express();
+
+const userRoutes = require("./routes/userRoutes");
+
+// Middleware pour lire le JSON
+console.log("userRoutes value:", userRoutes);
+
+app.use(express.json());
+
+// Routes
+app.use("/users", userRoutes);
+
+// Démarrage du serveur
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
+package.json
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js"
+
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
+  }
+}
+
+verifie si on a bien contrôleur Express complet pour l’entité User.
+Inclure : validations, try/catch, messages d’erreurs clairs.
+
+
+Génère un contrôleur Express complet pour l’entité product.
+Inclure : validations, try/catch, messages d’erreurs clairs.
+
+peut tu faire la couche service de ce projet
+
+Postman
+
+{
+  "info": {
+    "name": "Backend CRUD API",
+    "_postman_id": "12345678-abcd-efgh-ijkl-1234567890ab",
+    "description": "Collection pour tester tous les endpoints CRUD du projet",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "http://localhost:3000/users", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["users"] }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "http://localhost:3000/users/1", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["users","1"] }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Alice\",\n  \"email\": \"alice@test.com\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "http://localhost:3000/users", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["users"] }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Alice Updated\",\n  \"email\": \"alice2@test.com\",\n  \"password\": \"newpassword123\"\n}" },
+            "url": { "raw": "http://localhost:3000/users/1", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["users","1"] }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "http://localhost:3000/users/1", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["users","1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": { "method": "GET", "header": [], "url": { "raw": "http://localhost:3000/products", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["products"] } }
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Laptop\",\n  \"price\": 1200,\n  \"stock\": 10\n}" },
+            "url": { "raw": "http://localhost:3000/products", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["products"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Finish backend\",\n  \"description\": \"Complete the Express API\",\n  \"status\": \"pending\"\n}" },
+            "url": { "raw": "http://localhost:3000/tasks", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["tasks"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Website Redesign\",\n  \"description\": \"Update the website layout\",\n  \"status\": \"planning\"\n}" },
+            "url": { "raw": "http://localhost:3000/projects", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["projects"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Create Ticket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bug in login\",\n  \"description\": \"Login fails on invalid input\",\n  \"status\": \"open\",\n  \"priority\": \"high\"\n}" },
+            "url": { "raw": "http://localhost:3000/tickets", "protocol": "http", "host": ["localhost"], "port": "3000", "path": ["tickets"] }
+          }
+        }
+      ]
+    }
+  
+  
+  Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+react-dom-client.development.js:5021 Uncaught Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of `TaskList`.
+    at createFiberFromTypeAndProps (react-dom-client.development.js:5021:1)
+    at createFiberFromElement (react-dom-client.development.js:5035:1)
+    at createChild (react-dom-client.development.js:6337:1)
+    at reconcileChildrenArray (react-dom-client.development.js:6669:1)
+    at reconcileChildFibersImpl (react-dom-client.development.js:6990:1)
+    at react-dom-client.development.js:7098:1
+    at reconcileChildren (react-dom-client.development.js:9699:1)
+    at beginWork (react-dom-client.development.js:11988:1)
+    at runWithFiberInDEV (react-dom-client.development.js:870:1)
+    at performUnitOfWork (react-dom-client.development.js:17639:1)
+react-dom-client.development.js:9362 An error occurred in the <div> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+defaultOnUncaughtError	@	react-dom-client.development.js:9362
+
+
+mise de <taskList> en commentaire dens app.js
+
+
+Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+react-dom-client.development.js:12609 Uncaught InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('/static/media/ProjectList.31d6cfe0d16ae931b73c') is not a valid name.
+    at completeWork (react-dom-client.development.js:12609:1)
+    at runWithFiberInDEV (react-dom-client.development.js:870:1)
+    at completeUnitOfWork (react-dom-client.development.js:17777:1)
+    at performUnitOfWork (react-dom-client.development.js:17657:1)
+    at workLoopSync (react-dom-client.development.js:17469:1)
+    at renderRootSync (react-dom-client.development.js:17450:1)
+    at performWorkOnRoot (react-dom-client.development.js:16583:1)
+    at performWorkOnRootViaSchedulerTask (react-dom-client.development.js:18957:1)
+    at MessagePort.performWorkUntilDeadline (scheduler.development.js:45:1)
+completeWork @ react-dom-client.development.js:12609
+runWithFiberInDEV @ react-dom-client.development.js:870
+completeUnitOfWork @ react-dom-client.development.js:17777
+performUnitOfWork @ react-dom-client.development.js:17657
+workLoopSync @ react-dom-client.development.js:17469
+renderRootSync @ react-dom-client.development.js:17450
+performWorkOnRoot @ react-dom-client.development.js:16583
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:18957
+performWorkUntilDeadline @ scheduler.development.js:45
+</static/media/ProjectList.31d6cfe0d16ae931b73c>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:327
+App @ App.js:40
+react_stack_bottom_frame @ react-dom-client.development.js:25904
+renderWithHooksAgain @ react-dom-client.development.js:7762
+renderWithHooks @ react-dom-client.development.js:7674
+updateFunctionComponent @ react-dom-client.development.js:10166
+beginWork @ react-dom-client.development.js:11778
+runWithFiberInDEV @ react-dom-client.development.js:870
+performUnitOfWork @ react-dom-client.development.js:17639
+workLoopSync @ react-dom-client.development.js:17469
+renderRootSync @ react-dom-client.development.js:17450
+performWorkOnRoot @ react-dom-client.development.js:16583
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:18957
+performWorkUntilDeadline @ scheduler.development.js:45
+<App>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:327
+./src/index.js @ index.js:9
+options.factory @ react refresh:37
+__webpack_require__ @ bootstrap:22
+(anonymous) @ startup:7
+(anonymous) @ startup:7Understand this error
+App.js:40 An error occurred in the </static/media/ProjectList.31d6cfe0d16ae931b73c> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+
+Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tasks' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/tasks:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/projects' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/projects:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tickets' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/tickets:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/projects' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/projects:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tasks' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/tasks:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tickets' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/tickets:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/products' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/products:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/products' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/products:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:26 AxiosError
+handleSubmit @ UserList.js:26Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+UserList.js:27 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'data')
+    at handleSubmit (UserList.js:27:1)Understand this errorDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tasks' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/tasks:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/projects' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/projects:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tickets' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/tickets:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/projects' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/projects:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tasks' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/tasks:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/tickets' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/tickets:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/products' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/products:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/products' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/products:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+(index):1 Access to XMLHttpRequest at 'http://localhost:3000/users' from origin 'http://localhost:3001' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
+UserList.js:26 AxiosError
+handleSubmit @ UserList.js:26Understand this error
+:3000/users:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
+UserList.js:27 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'data')
+    at handleSubmit (UserList.js:27:1)Understand this error
+	
+	
+	
+	Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/products:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/tasks:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/projects:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/tickets:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/users:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+UserList.js:15 AxiosError
+fetchUsers @ UserList.js:15Understand this error
+:3000/products:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+ProductList.js:80 AxiosError
+fetchProducts @ ProductList.js:80Understand this error
+:3000/tasks:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+TaskList.js:100 AxiosError
+fetchTasks @ TaskList.js:100Understand this error
+:3000/projects:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+ProjectList.js:17 AxiosError
+fetchProjects @ ProjectList.js:17Understand this error
+:3000/tickets:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+TicketList.js:18 AxiosError
+fetchTickets @ TicketList.js:18Understand this error
+:3000/users:1  Failed to load resource: the server responded with a status of 404 (Not Found)Understand this error
+UserList.js:26 AxiosError
+
+
+
+	
+	
+	
